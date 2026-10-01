@@ -1,0 +1,30 @@
+.DS_Store
+*.swp
+*~
+.cursor/
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Gradle / Ghidra extension build (lib/ is buildExtension's copyDependencies; bin/ is IDE output)
+.gradle/
+build/
+dist/
+/ghidra-extension/lib/
+/ghidra-extension/bin/
+
+# Ghidra projects (kept in ../ghidra-projects/), firmware images, local WIP notes, companion repo symlinks
+*.gpr
+*.rep/
+*.lock
+*.bin
+/plans/
+/ME7Sum
+/ME7L
+/NefMotoOpenSource
+/ecuxplot

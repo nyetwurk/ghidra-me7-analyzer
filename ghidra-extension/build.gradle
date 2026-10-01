@@ -1,0 +1,19 @@
+// Builds with Ghidra's support/buildExtension.gradle. Set GHIDRA_INSTALL_DIR as a Gradle
+// property (-P or ~/.gradle/gradle.properties, which IDE imports also read) or in the environment.
+def ghidraDir = project.findProperty('GHIDRA_INSTALL_DIR') ?: System.getenv('GHIDRA_INSTALL_DIR')
+assert ghidraDir : 'GHIDRA_INSTALL_DIR is not set'
+apply from: "${ghidraDir}/support/buildExtension.gradle"
+
+// Ghidra 12.x needs Java 21 bytecode; any JDK >= 21 can build it.
+tasks.withType(JavaCompile).configureEach {
+	options.release = 21
+}
+
+sourceSets {
+	main.resources.srcDir '../patterns'
+	// GhidraScripts are compiled by Ghidra at run time; this source set only type-checks them.
+	scripts {
+		java.srcDirs = ['ghidra_scripts']
+		compileClasspath += main.output + main.compileClasspath
+	}
+}
