@@ -12,11 +12,18 @@ Needs JDK 21+, Python 3.11+, Ghidra 12.x, and [keyhana/c166-ghidra-module](https
 
 ```bash
 echo "GHIDRA_INSTALL_DIR=/path/to/ghidra" >> ~/.gradle/gradle.properties  # once per machine
-(cd ghidra-extension && ./gradlew buildExtension)  # install dist/*.zip via File > Install Extensions
-(cd tools/me7tools && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" && .venv/bin/pytest)
+make  # me7tools venv + pytest, then ghidra-extension/dist/ME7Ghidra-<version>-ghidra_<ghidra>.zip
 ```
 
-The tests use the reference images from [nyetwurk/ME7Sum](https://github.com/nyetwurk/ME7Sum) `bins/`, cloned beside this tree (`../ME7Sum`) or pointed to by `ME7SUM_BINS`; they skip otherwise.
+Install the zip with File > Install Extensions. `make help` lists the targets; `make GHIDRA_INSTALL_DIR=download GHIDRA_VERSION=12.1.4 extension` builds against a downloaded Ghidra in `build/ghidra/`, as CI does. The tests use the reference images from [nyetwurk/ME7Sum](https://github.com/nyetwurk/ME7Sum) `bins/`, cloned beside this tree (`../ME7Sum`) or pointed to by `ME7SUM_BINS`; they skip otherwise.
+
+## Releases
+
+- The version comes from git tags only (`git describe`): `vX.Y.Z` gives `X.Y.Z`, later commits add `-N-gHASH`, and uncommitted changes add `-dirty`. Do not edit version strings by hand; `make version` prints the current one.
+- Tag `vX.Y.Z` for a release and `vX.Y.Z-rcN` for a prerelease. Bump Z for fixes and needle corrections, Y for new needles, scripts or analyzer features, and X for incompatible changes to `me7-core.yaml` fields or symbol names.
+- Ghidra only installs an extension built for its own version, so each release has one zip per Ghidra version in the `.github/workflows/build.yml` matrix. The ME7 version is in the zip name, the extension description, the jar manifest, and the analyzer's log line.
+- Release notes come from [git-cliff](https://git-cliff.org/) (`cliff.toml`), grouped by commit prefix: `feat:`/`add:`, `fix:`, `needle:`/`pattern:` (signatures), `docs:`, `refactor:`, `chore:`/`ci:`/`build:`/`test:`. `make changelog` previews unreleased notes.
+- `build.yml` runs `make test extension` on every push and PR and uploads the zips; `release.yml` runs it on `v*` tags and publishes a GitHub release.
 
 ## Import an image
 

@@ -1,8 +1,13 @@
 // Builds with Ghidra's support/buildExtension.gradle. Set GHIDRA_INSTALL_DIR as a Gradle
 // property (-P or ~/.gradle/gradle.properties, which IDE imports also read) or in the environment.
+// The top-level Makefile passes ME7_VERSION (from git tags); see README "Releases".
+import org.apache.tools.ant.filters.ReplaceTokens
+
 def ghidraDir = project.findProperty('GHIDRA_INSTALL_DIR') ?: System.getenv('GHIDRA_INSTALL_DIR')
 assert ghidraDir : 'GHIDRA_INSTALL_DIR is not set'
 apply from: "${ghidraDir}/support/buildExtension.gradle"
+
+def me7Version = project.findProperty('ME7_VERSION') ?: 'dev'
 
 // Ghidra 12.x needs Java 21 bytecode; any JDK >= 21 can build it.
 tasks.withType(JavaCompile).configureEach {
@@ -15,5 +20,21 @@ sourceSets {
 	scripts {
 		java.srcDirs = ['ghidra_scripts']
 		compileClasspath += main.output + main.compileClasspath
+	}
+}
+
+jar {
+	manifest {
+		attributes('Implementation-Title': 'ME7Ghidra', 'Implementation-Version': me7Version)
+	}
+}
+
+// extension.properties "version" must equal the Ghidra version (Ghidra refuses others), so our
+// version goes in the zip name and the description.
+tasks.named('buildExtension') {
+	dependsOn 'compileScriptsJava'
+	archiveFileName = "ME7Ghidra-${me7Version}-ghidra_${ghidra_version}.zip"
+	filesMatching('**/extension.properties') {
+		filter(ReplaceTokens, tokens: [me7version: me7Version])
 	}
 }
