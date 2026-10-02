@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Monitor GitHub Actions workflows for updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    assignees:
+      - "nyetwurk"
+  # Gradle wrapper; build.yml checks it against every Ghidra version in the matrix
+  - package-ecosystem: "gradle"
+    directory: "/ghidra-extension"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    assignees:
+      - "nyetwurk"
+  # me7tools pyproject; only raise the >= floors when a new release falls outside them
+  - package-ecosystem: "pip"
+    directory: "/tools/me7tools"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    versioning-strategy: increase-if-necessary
+    groups:
+      pip-all:
+        patterns: ["*"]
+    assignees:
+      - "nyetwurk"

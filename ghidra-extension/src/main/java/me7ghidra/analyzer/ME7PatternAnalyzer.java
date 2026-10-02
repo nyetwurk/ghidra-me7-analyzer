@@ -97,7 +97,9 @@ public class ME7PatternAnalyzer extends AbstractAnalyzer {
 				log.appendMsg(NAME, "Labeled " + n.name + " @ " + label + delta);
 			}
 		}
-		log.appendMsg(NAME, "Named " + named + " pattern hit(s)");
+		String version = getClass().getPackage().getImplementationVersion();
+		log.appendMsg(NAME, "Named " + named + " pattern hit(s) (ME7Ghidra "
+			+ (version != null ? version : "dev") + ")");
 		return named > 0;
 	}
 
