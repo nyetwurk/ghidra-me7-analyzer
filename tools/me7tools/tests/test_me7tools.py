@@ -145,6 +145,41 @@ def test_dam_labels():
     assert got[0].comment == "load (t.ecu)"
 
 
+XDF = """\
+<XDFFORMAT><XDFHEADER><baseoffset>0</baseoffset></XDFHEADER>
+<XDFCONSTANT><title>WESSOT</title><description>inlet close</description>
+<EMBEDDEDDATA mmedaddress="0x10004" mmedelementsizebits="8" />
+<units>deg</units><MATH equation="2.8125 * X"><VAR id="X" /></MATH></XDFCONSTANT>
+<XDFCONSTANT><title>WESSOT</title><description>duplicate</description>
+<EMBEDDEDDATA mmedaddress="0x10004" mmedelementsizebits="8" /></XDFCONSTANT>
+<XDFTABLE><title>KFTEST</title><description>a map</description>
+<XDFAXIS id="x"><EMBEDDEDDATA mmedaddress="0x20000" mmedelementsizebits="16" />
+<indexcount>4</indexcount><units>rpm</units></XDFAXIS>
+<XDFAXIS id="y"><EMBEDDEDDATA mmedaddress="0x0" mmedelementsizebits="8" /><indexcount>2</indexcount></XDFAXIS>
+<XDFAXIS id="z"><EMBEDDEDDATA mmedaddress="0x20100" mmedelementsizebits="8" mmedrowcount="2" mmedcolcount="4" />
+<units>%</units><MATH equation="0.5 * X"><VAR id="X" /></MATH></XDFAXIS>
+</XDFTABLE></XDFFORMAT>
+"""
+
+
+def test_xdf_labels():
+    got = {lb.name: lb for lb in labels.xdf_labels(XDF)}
+    assert set(got) == {"WESSOT", "KFTEST", "KFTEST_x"}
+    assert (got["WESSOT"].addr, got["WESSOT"].size) == (0x810004, 1)
+    assert "inlet close" in got["WESSOT"].comment and "2.8125 * X" in got["WESSOT"].comment
+    assert (got["KFTEST"].addr, got["KFTEST"].size) == (0x820100, 0)
+    assert "a map" in got["KFTEST"].comment and "8 bytes" in got["KFTEST"].comment
+    assert (got["KFTEST_x"].addr, got["KFTEST_x"].size) == (0x820000, 0)
+    assert "8 bytes" in got["KFTEST_x"].comment
+    assert "KFTEST_y" not in got
+
+
+def test_ecu_comment_collapses_whitespace():
+    text = "Z_dk, {}, 0x383976, 0, 0x2, {Zyklusflag:\tDK}\n"
+    lb = labels.ecu_labels(text, "t.ecu")[0]
+    assert lb.comment == "Zyklusflag: DK mask 0x2 (t.ecu)"
+
+
 def test_ecu_does_not_override_dam():
     maps, ram = labels.parse_dam(DAM)
     ecu = labels.ecu_labels(ECU.replace("rl_w", "VAR_W"), "t.ecu")

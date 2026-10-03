@@ -237,10 +237,15 @@ def parse_xdf(text: str) -> list[ET.Element]:
     return root.findall("XDFTABLE") + root.findall("XDFCONSTANT")
 
 
+def xdf_z(el: ET.Element) -> ET.Element | None:
+    """The node holding a table's values (its z axis) or a constant's own element."""
+    return el.find("XDFAXIS[@id='z']") if el.tag == "XDFTABLE" else el
+
+
 def decode_xdf(el: ET.Element, img: bytes) -> Table:
     title = el.findtext("title", "")
     desc = el.findtext("description", "")
-    z = el.find("XDFAXIS[@id='z']") if el.tag == "XDFTABLE" else el
+    z = xdf_z(el)
     ed = z.find("EMBEDDEDDATA")
     eq = z.find("MATH").get("equation", "X") if z.find("MATH") is not None else "X"
     rows = int(ed.get("mmedrowcount", "1"))

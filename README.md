@@ -4,7 +4,7 @@ Static analysis tooling for Bosch **ME7.1 / ME7.1.1 / ME7.5** flash images on **
 
 - `patterns/me7-core.yaml`: shared needles (field reference in the file header).
 - `ghidra-extension/`: `ME7 Pattern Namer` analyzer and the `ME7SetupScript` memory map pre-script.
-- `tools/me7tools/`: `me7probe`, the same layout discovery and needle matching without Ghidra; `me7labels` and `me7modules`, which build the label and module TSVs for the Ghidra scripts below; `me7map`, which decodes maps from DAMOS or XDF definitions.
+- `tools/me7tools/`: `me7probe`, the same layout discovery and needle matching without Ghidra; `me7labels` and `me7modules`, which build the label and module TSVs for the Ghidra scripts below; `me7map`, which decodes maps from DAMOS or XDF definitions; `me7ghidra`, which imports into, runs scripts on, and exports the headless project.
 
 ## Setup
 
@@ -36,6 +36,8 @@ Install the zip with File > Install Extensions. `make help` lists the targets; `
     -scriptPath ghidra-extension/ghidra_scripts -preScript ME7SetupScript.java
 ```
 
+`me7ghidra init` runs that import for the default images into `../ghidra-projects/ME7/headless`, then applies `data/<part>/labels.tsv` and `modules.tsv` from that project. `me7ghidra run 06A906032NL ME7Decomp.java 0x8A3636` runs one script read-only. `me7ghidra sync` exports the headless programs as GZFs to `headless/gzf/` for File > Import in the GUI; it never opens the live project. Set `GHIDRA_INSTALL_DIR` if Ghidra is not under `/usr/local`, `/opt`, or `$HOME`. Set `ME7_BINS` (or `ME7SUM_BINS`) if the images are not in `../ME7Sum/bins`. Set `ME7_PROJECT` if the Ghidra project is not `../ghidra-projects/ME7`.
+
 `me7probe image.bin` prints the same layout and needle hits.
 
 `me7map` decodes calibration maps into physical units, with their axes:
@@ -59,11 +61,11 @@ With `--dam`, map layout follows the DAMOS record type: shared axes (`Stützstel
 Build the TSVs with `me7tools`:
 
 ```bash
-me7labels [--dam image.dam] [--ecu *.ecu ...] -o DIR   # labels.tsv; maps.tsv and ram.tsv with --dam
+me7labels [--dam image.dam | --xdf image.xdf] [--ecu *.ecu ...] -o DIR   # labels.tsv; maps.tsv and ram.tsv with --dam
 me7modules fr.txt -o DIR/modules.tsv                   # from pdftotext -layout of a Funktionsrahmen
 ```
 
-`me7labels` reads an ASAP2DAM DAMOS export (code page 850: maps from `/SPZ`, RAM measurements from `/UMP`, bit flags typed size 0 with their mask in the comment) and ME7Logger `.ecu` files, which only add names DAMOS lacks. `me7modules` reads the FR's ABK tables: a parameter gets every module that lists it, a variable the majority of its `Quelle` column. DAMOS and FR documents are usually confidential, so write their TSVs outside the repo (for example next to the Ghidra projects); `.ecu`-only output from [nyetwurk/ME7L](https://github.com/nyetwurk/ME7L) is public.
+`me7labels` reads an ASAP2DAM DAMOS export (code page 850: maps from `/SPZ`, RAM measurements from `/UMP`, bit flags typed size 0 with their mask in the comment), or a TunerPro XDF (file offset plus `0x800000`; an axis with its own address is `name_x` / `name_y`), and ME7Logger `.ecu` files, which only add names the definition lacks. `me7modules` reads the FR's ABK tables: a parameter gets every module that lists it, a variable the majority of its `Quelle` column. DAMOS and FR documents are usually confidential, so write their TSVs outside the repo (for example next to the Ghidra projects); `.ecu`-only output from [nyetwurk/ME7L](https://github.com/nyetwurk/ME7L) is public.
 
 ## Live session with an agent
 
