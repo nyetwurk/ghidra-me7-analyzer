@@ -186,6 +186,34 @@ def test_ecu_does_not_override_dam():
     assert [lb.name for lb in labels.merge(labels.dam_labels(maps, ram), ecu)].count("VAR_W") == 0
 
 
+PROBE = """\
+dpp: DPP0=0x0204 DPP1=0x0205 DPP2=0x00E0 DPP3=0x0003 (file+0xDC08)
+  hit   DWKR_dwkr @ file+0x647F4
+  hit   DWKR_dwkr @ file+0x647F4
+  hit   map_interp_table8 @ file+0x78AC
+  hit   map_interp_table8 @ file+0x7976
+  miss  map_interp_table8_b
+  noent LDRPID_ldiopu @ 0x6951C: not after RETS/padding
+"""
+
+
+def test_probe_labels():
+    got = labels.probe_labels(PROBE, "t.probe")
+    assert [(lb.addr, lb.name, lb.size) for lb in got] == [
+        (0x8647F4, "DWKR_dwkr", 0), (0x8078AC, "map_interp_table8_8078AC", 0), (0x807976, "map_interp_table8_807976", 0)]
+    assert got[0].comment == "me7info needle (t.probe)"
+
+
+def test_labels_keeps_existing(tmp_path):
+    old = "addr\tname\tsize\tcomment\n0x381B32\tupload_latch\t1\thand\n0xE2BA\tDWKR_dwkr\t\tkept\n"
+    (tmp_path / "labels.tsv").write_text(old)
+    (tmp_path / "p.txt").write_text(PROBE)
+    labels.main(["--probe", str(tmp_path / "p.txt"), "--labels", str(tmp_path / "labels.tsv"), "-o", str(tmp_path)])
+    assert (tmp_path / "labels.tsv").read_text() == old + (
+        "0x8078AC\tmap_interp_table8_8078AC\t0\tme7info needle (p.txt)\n"
+        "0x807976\tmap_interp_table8_807976\t0\tme7info needle (p.txt)\n")
+
+
 def test_fr_modules():
     params, variables = frmodules.parse_fr(FR)
     assert params == {"KFTEST": ["MODA", "MODB"]}

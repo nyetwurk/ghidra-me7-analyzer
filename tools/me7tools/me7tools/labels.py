@@ -1,9 +1,11 @@
 """Build a label TSV for ME7ImportLabelsScript (addr, name, size, comment).
 
 Sources: an ASAP2DAM DAMOS export (.dam, code page 850) for maps (/SPZ) and RAM
-measurements (/UMP), a TunerPro XDF for flash maps and constants, and ME7Logger
-.ecu files for RAM variables. All DAMOS or XDF entries are kept; .ecu files only
-add names not seen yet. With --dam, maps.tsv and ram.tsv are written too.
+measurements (/UMP), a TunerPro XDF for flash maps and constants, ME7Logger
+.ecu files for RAM variables, and `me7info probe` output for function entries.
+All DAMOS or XDF entries are kept; .ecu files and probe hits only add names not
+seen yet. --labels keeps an existing labels.tsv as is, in its order, and appends
+only new names. With --dam, maps.tsv and ram.tsv are written too.
 """
 from __future__ import annotations
 
@@ -29,6 +31,7 @@ UMP = re.compile(
     r"^/UMP, \{\}, ([^,]+), \{(.*?)\}, \$([0-9A-F]+), \d+, \d+, ([^,]+), \d+, \$([0-9A-F]+)", re.M | re.S)
 ECU = re.compile(
     r";?\s*(\w+)\s*,\s*\{[^}]*\}\s*,\s*0x([0-9A-Fa-f]+)\s*,\s*(\d)\s*,\s*0x([0-9A-Fa-f]+)\s*,.*\{([^}]*)\}\s*$")
+PROBE_HIT = re.compile(r"^\s*hit\s+(\S+) @ file\+0x([0-9A-Fa-f]+)\s*$", re.M)
 
 
 def parse_dam(text: str) -> tuple[list[dict], list[dict]]:
@@ -135,6 +138,25 @@ def ecu_labels(text: str, source: str) -> list[Label]:
     return out
 
 
+def probe_labels(text: str, source: str, base: int = 0x800000) -> list[Label]:
+    """Function entries from `me7info probe` hit lines (file offsets). A needle
+    with one entry keeps its name; several entries are name_ADDR. A caller
+    needle is named for a map it reads, which need not be the Bosch function."""
+    hits = list(dict.fromkeys((m[1], base + int(m[2], 16)) for m in PROBE_HIT.finditer(text)))
+    count: dict[str, int] = {}
+    for name, _ in hits:
+        count[name] = count.get(name, 0) + 1
+    return [Label(addr, name if count[name] == 1 else f"{name}_{addr:06X}", 0, f"me7info needle ({source})")
+            for name, addr in hits]
+
+
+def known_names(tsv: str) -> set[str]:
+    """Lower-cased names in labels.tsv text."""
+    lines = tsv.splitlines()
+    ni = lines[0].split("\t").index("name")
+    return {line.split("\t")[ni].lower() for line in lines[1:] if line}
+
+
 def merge(base: list[Label], *fill: list[Label]) -> list[Label]:
     """All of base, plus fill labels whose name (case-insensitive) is not known yet;
     sorted by address with bit flags last."""
@@ -148,15 +170,19 @@ def merge(base: list[Label], *fill: list[Label]) -> list[Label]:
     return sorted(out, key=lambda lb: (lb.addr, lb.bit))
 
 
-def write_tsv(path: Path, cols: list[str], rows: list[dict]) -> None:
-    with path.open("w", encoding="utf-8") as f:
-        f.write("\t".join(cols) + "\n")
-        for r in rows:
-            cells = []
-            for c in cols:
-                text = f"0x{r[c]:06X}" if c == "addr" else str(r[c])
-                cells.append(" ".join(text.split()))
-            f.write("\t".join(cells) + "\n")
+def tsv_rows(cols: list[str], rows: list[dict]) -> str:
+    out = ""
+    for r in rows:
+        cells = [" ".join((f"0x{r[c]:06X}" if c == "addr" else str(r[c])).split()) for c in cols]
+        out += "\t".join(cells) + "\n"
+    return out
+
+
+def write_tsv(path: Path, cols: list[str], rows: list[dict], head: str | None = None) -> None:
+    """Write rows under the header, or under head (existing TSV text) when given."""
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(head.rstrip("\n") + "\n" if head else "\t".join(cols) + "\n")
+        f.write(tsv_rows(cols, rows))
 
 
 def read_text(path: Path) -> str:
@@ -168,16 +194,20 @@ def read_text(path: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> None:
-    p = argparse.ArgumentParser(description="Build labels.tsv from a DAMOS export, a TunerPro XDF, and/or ME7Logger .ecu files")
+    p = argparse.ArgumentParser(
+        description="Build labels.tsv from a DAMOS export, a TunerPro XDF, ME7Logger .ecu files, and/or me7info probe output")
     p.add_argument("--dam", type=Path, help="ASAP2DAM .dam export (code page 850)")
     p.add_argument("--xdf", type=Path, help="TunerPro XDF (flash maps and constants)")
     p.add_argument("--ecu", type=Path, nargs="*", default=[], help="ME7Logger .ecu files")
+    p.add_argument("--probe", type=Path, help="me7info probe output (function entries from hit lines)")
+    p.add_argument("--labels", type=Path, help="existing labels.tsv to keep as is; only new names are appended")
     p.add_argument("-o", "--out", type=Path, required=True, help="output directory")
     a = p.parse_args(argv)
     if bool(a.dam) and bool(a.xdf):
         p.error("give one of --dam or --xdf")
-    if not a.dam and not a.xdf and not a.ecu:
-        p.error("need --dam, --xdf, and/or --ecu")
+    if not a.dam and not a.xdf and not a.ecu and not a.probe:
+        p.error("need --dam, --xdf, --ecu, and/or --probe")
+    head = a.labels.read_text(encoding="utf-8") if a.labels else None
     a.out.mkdir(parents=True, exist_ok=True)
     base, fill = [], []
     if a.xdf:
@@ -192,9 +222,14 @@ def main(argv: list[str] | None = None) -> None:
         print(f"{a.dam.name}: {len(maps)} maps, {len(ram)} ram")
     for e in sorted(a.ecu):
         fill.append(ecu_labels(e.read_text(encoding="latin1"), e.name))
+    if a.probe:
+        fill.append(probe_labels(a.probe.read_text(encoding="utf-8"), a.probe.name))
     labels = merge(base, *fill)
-    write_tsv(a.out / "labels.tsv", ["addr", "name", "size", "comment"], [asdict(lb) for lb in labels])
-    print(f"{len(labels)} labels -> {a.out / 'labels.tsv'}")
+    if head:
+        known = known_names(head)
+        labels = [lb for lb in labels if lb.name.lower() not in known]
+    write_tsv(a.out / "labels.tsv", ["addr", "name", "size", "comment"], [asdict(lb) for lb in labels], head)
+    print(f"{len(labels)} {'new ' if head else ''}labels -> {a.out / 'labels.tsv'}")
 
 
 if __name__ == "__main__":
