@@ -10,6 +10,7 @@ addresses and reference images are in `docs/me7-memory-map.md`.
   memory map pre-script.
 - `tools/me7tools/`:
   - `me7probe` does the same layout discovery and needle matching without Ghidra.
+  - `me7twin` finds a call in another bin after the immediate words change.
   - `me7labels` and `me7modules` build the label and module TSVs for the Ghidra
     scripts below.
   - `me7map` decodes maps from DAMOS or XDF definitions.
@@ -186,7 +187,7 @@ the proposed names and the functions left unnamed without changing the program.
 Build the TSVs with `me7tools`:
 
 ```bash
-me7labels [--dam image.dam | --xdf image.xdf] [--ecu *.ecu ...] -o DIR   # labels.tsv; maps.tsv and ram.tsv with --dam
+me7labels [--dam image.dam | --xdf image.xdf] [--ecu *.ecu ...] [--me7info labels.tsv] [--probe image.probe] [--labels DIR/labels.tsv] -o DIR   # labels.tsv; maps.tsv and ram.tsv with --dam
 me7modules fr.txt -o DIR/modules.tsv                   # from pdftotext -layout of a Funktionsrahmen
 ```
 
@@ -198,6 +199,12 @@ me7modules fr.txt -o DIR/modules.tsv                   # from pdftotext -layout 
 - A TunerPro XDF. The address is the file offset plus `0x800000`. An axis with
   its own address is `name_x` / `name_y`.
 - ME7Logger `.ecu` files, which only add names the definition lacks.
+- The TSV from `me7info generate --labels` in
+  [me7-logger](../me7-logger): needle function entries, RAM items, and map
+  bodies and axes located on that image. It only adds names the definition
+  lacks. With no DAMOS or XDF, Import Labels can read it directly.
+- `me7info probe` output. Each `hit` line is a function entry.
+- `--labels` keeps an existing `labels.tsv` as is and appends only new names.
 
 `me7modules` reads the FR's ABK tables. A parameter gets every module that
 lists it. A variable gets the majority of its `Quelle` column.

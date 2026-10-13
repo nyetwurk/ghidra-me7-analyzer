@@ -204,6 +204,14 @@ def test_probe_labels():
     assert got[0].comment == "me7info needle (t.probe)"
 
 
+def test_tsv_labels(tmp_path):
+    (tmp_path / "g.tsv").write_text(
+        "addr\tname\tsize\tcomment\n0x380010\tnmot\t1\tspeed\n0x8647F4\tDWKR_dwkr\t0\t\n")
+    labels.main(["--me7info", str(tmp_path / "g.tsv"), "-o", str(tmp_path)])
+    assert (tmp_path / "labels.tsv").read_text() == (
+        "addr\tname\tsize\tcomment\n0x380010\tnmot\t1\tspeed (g.tsv)\n0x8647F4\tDWKR_dwkr\t0\t(g.tsv)\n")
+
+
 def test_labels_keeps_existing(tmp_path):
     old = "addr\tname\tsize\tcomment\n0x381B32\tupload_latch\t1\thand\n0xE2BA\tDWKR_dwkr\t\tkept\n"
     (tmp_path / "labels.tsv").write_text(old)

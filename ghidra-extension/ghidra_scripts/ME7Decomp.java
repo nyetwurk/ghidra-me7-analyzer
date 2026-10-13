@@ -15,6 +15,10 @@ public class ME7Decomp extends GhidraScript {
         for (String a : getScriptArgs()) {
             Address addr = toAddr(Long.decode(a.startsWith("0x") ? a : "0x" + a));
             Function f = getFunctionContaining(addr);
+            if (f == null) {
+                disassemble(addr);
+                f = createFunction(addr, null);
+            }
             println("==================== " + a + " -> " + (f == null ? "NO FUNCTION" : f.getName() + " @ " + f.getEntryPoint()));
             if (f == null) {
                 continue;

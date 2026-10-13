@@ -19,6 +19,7 @@ me7labels = "me7tools.labels:main"
 me7modules = "me7tools.frmodules:main"
 me7map = "me7tools.maps:main"
 me7ghidra = "me7tools.headless:main"
+me7twin = "me7tools.twin:main"
 
 [tool.setuptools]
 packages = ["me7tools"]
