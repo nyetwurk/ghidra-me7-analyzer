@@ -96,27 +96,52 @@ public class ME7ImportLabelsScript extends GhidraScript {
 		}
 		SymbolTable st = currentProgram.getSymbolTable();
 		int refs = 0;
+		long extpPage = -1;
+		int extpRemain = 0;
 		for (Instruction insn : currentProgram.getListing().getInstructions(flash.getStart(), true)) {
 			monitor.checkCancelled();
 			if (!flash.contains(insn.getAddress())) {
 				break;
 			}
+			if (insn.getMnemonicString().equalsIgnoreCase("extp") && insn.getNumOperands() >= 2) {
+				Scalar sp = insn.getScalar(0);
+				Scalar sc = insn.getScalar(1);
+				if (sp != null && sc != null) {
+					long pv = sp.getUnsignedValue() & 0x3FF;
+					if (pv >= pageLo && pv <= pageHi) {
+						extpPage = pv;
+						extpRemain = (int) sc.getUnsignedValue();
+						continue;
+					}
+				}
+			}
+			long activeExtpPage = extpRemain > 0 ? extpPage : -1;
+			if (extpRemain > 0) {
+				extpRemain--;
+			}
+
 			long imm = movImm(insn);
 			if (imm < 0 || (imm >= pageLo && imm <= pageHi)) {
 				continue;
 			}
 			long page = -1;
 			Instruction n = insn.getNext();
-			for (int k = 0; k < 3 && n != null && movImm(n) >= 0; k++, n = n.getNext()) {
+			for (int k = 0; k < 4 && n != null && movImm(n) >= 0; k++, n = n.getNext()) {
 				long v = movImm(n);
 				if (v >= pageLo && v <= pageHi) {
 					page = v;
 					break;
 				}
 			}
+			if (page < 0 && activeExtpPage >= 0) {
+				page = activeExtpPage;
+			}
 			long target;
 			if (page >= 0 && imm < 0x4000) {
 				target = page << 14 | imm;
+			}
+			else if (activeExtpPage >= 0 && imm >= 0x4000) {
+				target = activeExtpPage << 14 | (imm & 0x3FFF);
 			}
 			else {
 				BigInteger p = currentProgram.getProgramContext()

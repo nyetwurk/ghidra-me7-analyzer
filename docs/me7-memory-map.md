@@ -51,3 +51,13 @@ Flash-copy addresses on `NL`/`CH`; add the kernel delta for other images. Locate
 ## Checksum code
 
 `CrcTableRef`, `CrcTableRef_B`, and `CrcPreBlockRef` are ME7Sum's `FindCRCTab` / `FindMainCRCPreBlk` needles with its masks. They agree with `me7sum` on all 94 images (CRC table on 94, pre block on 21). `XORChkSumGenerate` (the IDA CRC seed with a leading wildcard byte so the hit is word aligned) hits once, right after a `RETS`, on 65 of 94; on `CH` it is at `0x88CDEE`. ROMSYS is at file offset `0x8000`.
+
+## Porsche ME7.2 (512 KiB)
+
+Verified on Porsche 986 Boxster S ME7.2 (`512 KiB` flash, `C167`, `DPP0=0x0204`, `DPP1=0x0205`, `DPP2=0x00E0`, `DPP3=0x0003`):
+
+- **Segment `0x00` (`0x000000..0x007FFF`):** targets the **on-chip 32 KB C167 mask ROM** (not present in the `.ori` flash dump, and *not* a mirror of `flash[0..0x7FFF]` — `0/93` `CALLS 0x00:xxxx` targets land after `RET`/`RETS` in `flash[0..0x7FFF]`). Pass an external 32 KB mask-ROM file to `ME7SetupScript.java` if available, or let it skip `flash_mirror`.
+- **No RAM-uploaded VAG programming kernel:** `0x33`/`0x35`/`0x36` are absent; `sweep_copy_offset` on `CALLS 0x38` reports low confidence (`7/10`).
+- **Flash-resident KWP2000 & checksums (`patterns/me72.yaml`):**
+  - Two-tier KWP dispatcher (`me72_kwp_dispatch`, `0x84E984` on `y966ohc`), SID `0x10` (`me72_kwp_10_session`, `0x8249FC`), SID `0x27` SecurityAccess LFSR (`me72_kwp_27_lfsr`, `0x824FFE`), resident `0x31`/`0x34`/`0x37` programming ladder (`me72_kwp_prog_ladder`, `0x8411E0`), flash session `0x85` integrity check (`me72_flash_85_integrity`, `0x821DCA`), and boot magic checks (`me72_boot_magic_check`, `0x80BED0`/`0x83BED0`).
+  - Calibration-region CRC-32 (`u32` LE at file `0x1FC0E`) covers `0x10000..0x1FC03`.

@@ -3,17 +3,22 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from me7tools.layout import find_dpp, sweep_copy_offset
-from me7tools.patterns import load_needles
+from me7tools.layout import check_seg0_mirror, find_dpp, sweep_copy_offset
+from me7tools.patterns import Needle, load_default_needles, load_needles
 
 
-def probe(data: bytes) -> None:
+def probe(data: bytes, needles: list[Needle] | None = None) -> None:
     dpp = find_dpp(data)
     if dpp:
         vals = " ".join(f"DPP{i}=0x{v:04X}" for i, v in enumerate(dpp[0]))
         print(f"dpp: {vals} (file+{' '.join(f'0x{o:X}' for o in dpp[1])})")
     else:
         print("dpp: no full DPP0-3 init block found")
+
+    seg0 = check_seg0_mirror(data)
+    if seg0.targets:
+        note = "" if seg0.is_flash_mirror else " (external mask ROM likely; not flash mirror)"
+        print(f"seg0: {seg0.matched}/{seg0.targets} CALLS 0x00 targets after RET/RETS in flash[0..0x7FFF]{note}")
 
     sweep = sweep_copy_offset(data)
     if sweep:
@@ -25,7 +30,7 @@ def probe(data: bytes) -> None:
     else:
         print("ram code: no CALLS 0x38 targets")
 
-    for n in load_needles():
+    for n in needles if needles is not None else load_default_needles():
         hits = n.find(data)
         if not hits:
             print(f"  miss  {n.name}")
@@ -44,7 +49,10 @@ def probe(data: bytes) -> None:
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="Probe an ME7 flash image")
     p.add_argument("bin", type=Path, help="raw flash dump")
-    probe(p.parse_args(argv).bin.read_bytes())
+    p.add_argument("--patterns", type=Path, action="append", help="override pattern YAML file(s)")
+    args = p.parse_args(argv)
+    needles = [n for path in args.patterns for n in load_needles(path)] if args.patterns else None
+    probe(args.bin.read_bytes(), needles=needles)
 
 
 if __name__ == "__main__":

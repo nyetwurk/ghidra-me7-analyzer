@@ -30,6 +30,32 @@ class SweepResult:
         return self.matched >= 10 and self.matched >= 2 * self.runner_up
 
 
+@dataclass
+class Seg0Result:
+    targets: int
+    matched: int
+
+    @property
+    def is_flash_mirror(self) -> bool:
+        return self.targets < 10 or self.matched * 4 >= self.targets
+
+
+def check_seg0_mirror(data: bytes, size: int = 0x8000) -> Seg0Result:
+    """Check whether CALLS 0x00:xxxx targets land after RET/RETS in flash[0..size)."""
+    calls = re.compile(rb"\xDA\x00(..)", re.S)
+    targets = {
+        t
+        for m in calls.finditer(data)
+        if m.start() % 2 == 0 and (t := struct.unpack("<H", m.group(1))[0]) < size
+    }
+    matched = sum(
+        1
+        for t in targets
+        if t >= 2 and data[t - 2 : t] in (b"\xdb\x00", b"\xcb\x00")
+    )
+    return Seg0Result(targets=len(targets), matched=matched)
+
+
 def find_dpp(data: bytes) -> tuple[tuple[int, ...], list[int]] | None:
     """Return (DPP0-3, file offsets) of the most common full block with DPP0 != 0.
 

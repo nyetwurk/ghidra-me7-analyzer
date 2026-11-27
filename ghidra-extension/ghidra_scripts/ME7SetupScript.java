@@ -1,7 +1,9 @@
 //@category ME7
 //@menupath Tools.ME7.Set Up Memory Map
 
+import java.io.File;
 import java.math.BigInteger;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,11 +52,42 @@ public class ME7SetupScript extends GhidraScript {
 		flashBlock.getBytes(flash, img);
 		println(String.format("flash: %d KB at 0x%06X", img.length / 1024, FLASH));
 
+		String[] args = getScriptArgs();
+		File maskRomFile = null;
+		boolean noMirror = false;
+		for (String a : args) {
+			if (a.equalsIgnoreCase("no-mirror") || a.equalsIgnoreCase("--no-mirror")) {
+				noMirror = true;
+			}
+			else if (!a.isEmpty()) {
+				maskRomFile = new File(a);
+			}
+		}
+
+		List<Integer> seg0Targets = callTargets(img, 0, (int) MIRROR_SIZE);
 		if (mem.getBlock(space.getAddress(0)) == null) {
-			MemoryBlock b = mem.createByteMappedBlock("flash_mirror", space.getAddress(0), flash,
-				Math.min(MIRROR_SIZE, img.length), false);
-			b.setRead(true);
-			b.setExecute(true);
+			if (maskRomFile != null && maskRomFile.isFile()) {
+				byte[] maskBytes = Files.readAllBytes(maskRomFile.toPath());
+				int len = (int) Math.min(MIRROR_SIZE, maskBytes.length);
+				MemoryBlock b = mem.createInitializedBlock("mask_rom", space.getAddress(0),
+					len, (byte) 0, monitor, false);
+				b.putBytes(space.getAddress(0), maskBytes, 0, len);
+				b.setRead(true);
+				b.setExecute(true);
+				b.setWrite(false);
+				println(String.format("mask_rom: mapped %d KB from %s at 0x0", len / 1024, maskRomFile.getName()));
+			}
+			else if (!noMirror && isFlashMirror(img, seg0Targets)) {
+				MemoryBlock b = mem.createByteMappedBlock("flash_mirror", space.getAddress(0), flash,
+					Math.min(MIRROR_SIZE, img.length), false);
+				b.setRead(true);
+				b.setExecute(true);
+			}
+			else {
+				println(String.format(
+					"flash_mirror: skipped (%d CALLS 0x00 targets do not match flash[0..0x7FFF]; pass mask-ROM path if available)",
+					seg0Targets.size()));
+			}
 		}
 
 		int[] dpp = findDpp(img);
@@ -108,6 +141,12 @@ public class ME7SetupScript extends GhidraScript {
 		disassemble(flash);
 		for (long v = FLASH + 4; v < FLASH + 0x200; v += 4) {
 			disassemble(space.getAddress(v));
+		}
+		if (mem.getBlock("mask_rom") != null) {
+			for (int t : seg0Targets) {
+				seedFunction(space.getAddress(t));
+			}
+			println("mask_rom: seeded " + seg0Targets.size() + " CALLS 0x00 targets");
 		}
 		if (mem.getBlock(ram) != null) {
 			for (int t : seeds) {
@@ -175,6 +214,32 @@ public class ME7SetupScript extends GhidraScript {
 
 	private static boolean afterReturn(byte[] d, int p) {
 		return p >= 2 && d[p - 1] == 0 && ((d[p - 2] & 0xFF) == 0xDB || (d[p - 2] & 0xFF) == 0xCB);
+	}
+
+	private static List<Integer> callTargets(byte[] d, int seg, int size) {
+		TreeSet<Integer> targets = new TreeSet<>();
+		for (int i = 0; i + 4 <= d.length; i += 2) {
+			if ((d[i] & 0xFF) == 0xDA && (d[i + 1] & 0xFF) == seg) {
+				int t = u16(d, i + 2);
+				if (t < size && (t & 1) == 0) {
+					targets.add(t);
+				}
+			}
+		}
+		return new ArrayList<>(targets);
+	}
+
+	private static boolean isFlashMirror(byte[] d, List<Integer> seg0Targets) {
+		if (seg0Targets.size() < 10) {
+			return true;
+		}
+		int matched = 0;
+		for (int t : seg0Targets) {
+			if (afterReturn(d, t)) {
+				matched++;
+			}
+		}
+		return matched * 4 >= seg0Targets.size();
 	}
 
 	/** Even CALLS 0x80+seg:xxxx targets inside the image that start right after a RET or RETS. */
