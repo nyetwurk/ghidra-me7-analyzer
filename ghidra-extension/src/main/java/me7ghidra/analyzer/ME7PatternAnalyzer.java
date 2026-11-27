@@ -50,16 +50,21 @@ public class ME7PatternAnalyzer extends AbstractAnalyzer {
 	@Override
 	public boolean added(Program program, AddressSetView set, TaskMonitor monitor, MessageLog log)
 			throws CancelledException {
-		List<Needle> needles;
-		try (InputStream in = getClass().getResourceAsStream("/me7-core.yaml")) {
-			if (in == null) {
-				throw new IOException("not on the extension classpath");
+		List<Needle> needles = new ArrayList<>();
+		for (String res : new String[] { "/me7-core.yaml", "/me72.yaml" }) {
+			try (InputStream in = getClass().getResourceAsStream(res)) {
+				if (in == null) {
+					if (res.equals("/me7-core.yaml")) {
+						throw new IOException("not on the extension classpath");
+					}
+					continue;
+				}
+				needles.addAll(parse(new String(in.readAllBytes(), StandardCharsets.UTF_8)));
 			}
-			needles = parse(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-		}
-		catch (IOException | IllegalArgumentException e) {
-			log.appendMsg(NAME, "Cannot load me7-core.yaml: " + e);
-			return false;
+			catch (IOException | IllegalArgumentException e) {
+				log.appendMsg(NAME, "Cannot load " + res + ": " + e);
+				return false;
+			}
 		}
 
 		Memory memory = program.getMemory();

@@ -1,0 +1,49 @@
+# Porsche ME7.2 (512 KiB C167) structural signatures, shared by me7tools and ME7PatternAnalyzer.
+# Field reference is in patterns/me7-core.yaml.
+
+functions:
+  # Two-tier flash-resident KWP2000 second-stage dispatcher (CPU 0x84E984 on y966ohc).
+  - name: me72_kwp_dispatch
+    needle_hex: "88 90 88 80 88 70 88 60 F0 9C E1 08 F0 69 08 63 B9 86 F0 79 08 74 B9 87"
+    back_up: 0
+    unique: true
+    function: true
+    entry_after: ["DB 00"]
+
+  # KWP2000 SID 0x10 (DiagnosticSessionControl / PID read, CPU 0x8249FC on y966ohc).
+  - name: me72_kwp_10_session
+    needle_hex: "88 90 88 60 F0 9C F2 F4 ?? ?? 9A F4 ?? ?? F2 F5 ?? ?? 46 F5 08 00 2D"
+    back_up: 0
+    unique: true
+    function: true
+    entry_after: ["DB 00"]
+
+  # KWP2000 SID 0x27 SecurityAccess LFSR core (CPU 0x824FFE on y966ohc; EXTP #0x207 coeff read).
+  - name: me72_kwp_27_lfsr
+    needle_hex: "D7 60 07 02 D4 A4 ?? ?? D4 B4 ?? ?? CC 00 F0 4E F0 5F 00 44 10 55 50 4A 50 5B"
+    back_up: 0x28
+    unique: true
+    function: true
+    entry_after: ["DB 00"]
+
+  # Flash programming ladder: resident 0x31 / 0x34 / 0x37 dispatch (CPU 0x8411E0 on y966ohc).
+  - name: me72_kwp_prog_ladder
+    needle_hex: "F4 80 12 00 49 82 EA 20 ?? ?? 49 84 EA 20 ?? ?? 49 87 EA 20 ?? ?? 47 F8 0B 00"
+    back_up: 0x0E
+    unique: true
+    function: true
+    entry_after: ["DB 00"]
+
+  # Flash session 0x85 integrity check (CPU 0x821DCA on y966ohc).
+  - name: me72_flash_85_integrity
+    needle_hex: "F3 F8 ?? ?? 3D 02 E0 14 DB 00 E0 04 DB 00 F2 F2 ?? ?? F2 F4 ?? ?? 40 42 2D"
+    back_up: 0
+    unique: true
+    function: true
+    entry_after: ["DB 00"]
+
+  # Boot magic checks (0x5A5A / 0x3CC3) guarding variant-init path (0x80BED0 / 0x83BED0 on y966ohc).
+  - name: me72_boot_magic_check
+    needle_hex: "D7 40 1F 02 F2 F4 ?? ?? 46 F4 5A 5A 3D ?? D7 40 07 02 F2 F5 ?? ?? 46 F5 C3 3C 3D"
+    back_up: 0
+    function: false

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import importlib.resources as importlib_resources
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
-PATTERNS = Path(__file__).resolve().parents[3] / "patterns" / "me7-core.yaml"
+PATTERNS_DIR = Path(__file__).resolve().parents[3] / "patterns"
+PATTERNS = PATTERNS_DIR / "me7-core.yaml"
+DEFAULT_PATTERN_FILES = ("me7-core.yaml", "me72.yaml")
 
 
 @dataclass
@@ -83,6 +87,36 @@ def _needle(f: dict) -> Needle:
     )
 
 
+def _resolve_pattern_path(filename: str) -> Path | None:
+    for candidate in (
+        PATTERNS_DIR / filename,
+        Path(sys.prefix) / "patterns" / filename,
+    ):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def load_needles(path: Path = PATTERNS) -> list[Needle]:
     doc = yaml.safe_load(path.read_text(encoding="utf-8"))
     return [_needle(f) for f in doc["functions"]]
+
+
+def load_default_needles() -> list[Needle]:
+    """Load all bundled pattern files (me7-core.yaml, me72.yaml, etc.)."""
+    needles: list[Needle] = []
+    for name in DEFAULT_PATTERN_FILES:
+        path = _resolve_pattern_path(name)
+        if path is not None:
+            needles.extend(load_needles(path))
+            continue
+        try:
+            res = importlib_resources.files("me7tools").joinpath("patterns", name)
+            if res.is_file():
+                doc = yaml.safe_load(res.read_text(encoding="utf-8"))
+                needles.extend(_needle(f) for f in doc["functions"])
+        except (FileNotFoundError, ModuleNotFoundError):
+            pass
+    if not needles:
+        raise FileNotFoundError(f"Could not locate {DEFAULT_PATTERN_FILES[0]} in {PATTERNS_DIR}")
+    return needles

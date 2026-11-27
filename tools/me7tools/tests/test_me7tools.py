@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from me7tools import frmodules, labels, maps
-from me7tools.layout import find_dpp, sweep_copy_offset
-from me7tools.patterns import compile_needle, load_needles
+from me7tools.layout import check_seg0_mirror, find_dpp, sweep_copy_offset
+from me7tools.patterns import compile_needle, load_default_needles, load_needles
 from me7tools.probe import probe
 
 # docs/me7-memory-map.md reference images: MD5, kernel delta vs NL.
@@ -357,3 +357,42 @@ def test_needles(image: str):
             want = NON_KERNEL_HITS[image].get(n.name)
             assert labels == ([want] if want else []), n.name
         assert all(n.entry_ok(data, label) for label in labels), n.name
+
+
+def test_check_seg0_mirror_synthetic():
+    data = bytearray(0x9000)
+    for idx in range(12):
+        target = 0x100 + idx * 0x20
+        data[target - 2 : target] = b"\xdb\x00"
+        data[0x8000 + idx * 4 : 0x8000 + idx * 4 + 4] = struct.pack("<BBH", 0xDA, 0x00, target)
+    mirror = check_seg0_mirror(bytes(data))
+    assert mirror.targets == 12 and mirror.matched == 12 and mirror.is_flash_mirror
+
+    for idx in range(12):
+        target = 0x100 + idx * 0x20
+        data[target - 2 : target] = b"\x00\x00"
+    mask = check_seg0_mirror(bytes(data))
+    assert mask.targets == 12 and mask.matched == 0 and not mask.is_flash_mirror
+
+
+def test_me72_needles_loaded_and_match():
+    needles = {n.name: n for n in load_default_needles()}
+    for name in (
+        "XORChkSumGenerate",
+        "me72_kwp_dispatch",
+        "me72_kwp_10_session",
+        "me72_kwp_27_lfsr",
+        "me72_kwp_prog_ladder",
+        "me72_flash_85_integrity",
+        "me72_boot_magic_check",
+    ):
+        assert name in needles
+
+    lfsr = needles["me72_kwp_27_lfsr"]
+    buf = bytearray(0x80)
+    buf[0x1E:0x20] = b"\xdb\x00"
+    buf[0x48:0x48 + 26] = bytes.fromhex("D7600702D4A4D81CD4B4DA1CCC00F04EF05F00441055504A505B")
+    hits = lfsr.find(bytes(buf))
+    assert hits == [0x48]
+    label = lfsr.label(bytes(buf), hits[0])
+    assert label == 0x20 and lfsr.entry_ok(bytes(buf), label)
